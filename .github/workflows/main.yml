@@ -1,0 +1,48 @@
+name: Build Ralts APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip Any Uploaded Project Zip
+        run: |
+          for z in *.zip; do
+            if [ -f "$z" ]; then
+              echo "Unzipping $z..."
+              unzip -o "$z"
+            fi
+          done
+          # If files were uploaded inside a subfolder, move them to the root
+          if [ ! -f settings.gradle.kts ]; then
+            FOUND=$(find . -maxdepth 2 -name "settings.gradle.kts" | head -n 1)
+            if [ -n "$FOUND" ]; then
+              DIR=$(dirname "$FOUND")
+              cp -r "$DIR"/* .
+            fi
+          fi
+          # Ensure pre-installed SDK 34 is used so download never blocks
+          if [ -f app/build.gradle.kts ]; then
+            sed -i 's/compileSdk = 35/compileSdk = 34/g; s/targetSdk = 35/targetSdk = 34/g' app/build.gradle.kts
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Accept Android SDK Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RaltsEmeraldPet-Pixel-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
