@@ -6,26 +6,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unzip Any Uploaded Project Zip
+      - name: Extract Only the Latest Walking-Pet Zip
         run: |
+          rm -rf app build.gradle.kts settings.gradle.kts gradle.properties
+          SELECTED=""
+          # Prefer the zip that contains RaltsOverlayService.kt (the walking pet version)
           for z in *.zip; do
-            if [ -f "$z" ]; then
-              echo "Unzipping $z..."
-              unzip -o "$z"
+            if [ -f "$z" ] && unzip -l "$z" | grep -q "RaltsOverlayService.kt"; then
+              SELECTED="$z"
             fi
           done
-          # If files were uploaded inside a subfolder, move them to the root
-          if [ ! -f settings.gradle.kts ]; then
-            FOUND=$(find . -maxdepth 2 -name "settings.gradle.kts" | head -n 1)
-            if [ -n "$FOUND" ]; then
-              DIR=$(dirname "$FOUND")
-              cp -r "$DIR"/* .
-            fi
+          # Fallback if only one zip exists
+          if [ -z "$SELECTED" ]; then
+            SELECTED=$(ls -t *.zip 2>/dev/null | head -n 1)
           fi
-          # Ensure pre-installed SDK 34 is used so download never blocks
-          if [ -f app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = 35/compileSdk = 34/g; s/targetSdk = 35/targetSdk = 34/g' app/build.gradle.kts
-          fi
+          echo "Using project archive: $SELECTED"
+          unzip -o "$SELECTED"
+          sed -i 's/compileSdk = 35/compileSdk = 34/g; s/targetSdk = 35/targetSdk = 34/g' app/build.gradle.kts
+          sed -i 's/implementation("androidx.core:core-ktx:1.13.1")//g' app/build.gradle.kts
 
       - uses: actions/setup-java@v4
         with:
@@ -40,7 +38,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
